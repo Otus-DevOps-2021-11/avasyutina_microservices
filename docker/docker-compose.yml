@@ -1,66 +1,59 @@
 version: '3.3'
 services:
   post_db:
-    image: mongo:${POST_DB}
+    image: mongo:${DB_VER}
     volumes:
       - post_db:/data/db
     networks:
-      - back_net
+      - reddit_back
 
   ui:
     build: ./ui
-    image: ${USERNAME}/ui:${UI}
+    image: ${USER_NAME}/ui:${UI_VER}
+    environment:
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
     ports:
       - ${UI_PORT}:9292/tcp
     networks:
-      - front_net
+      - reddit_front
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.ui
 
   post:
     build: ./post-py
-    image: ${USERNAME}/post:${POST}
+    image: ${USER_NAME}/post:${POST_VER}
+    environment:
+      - POST_DATABASE_HOST=post_db
+      - POST_DATABASE=posts
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
+    depends_on:
+      - post_db
+    ports:
+      - "5000:5000"
     networks:
-      - front_net
-      - back_net
+      - reddit_front
+      - reddit_back
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
 
   comment:
     build: ./comment
-    image: ${USERNAME}/comment:${COMMENT}
+    image: ${USER_NAME}/comment:${COMMENT_VER}
+    environment:
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
     networks:
-      - front_net
-      - back_net
-
-  prometheus:
-    image: ${USERNAME}/prometheus
-    ports:
-      - '9090:9090'
-    volumes:
-      - prometheus_data:/prometheus
-    command: # Передаем доп параметры в командной строке
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention=1d' # Задаем время хранения метрик в 1 день
-    networks:
-      - front_net
-      - back_net
-
-  node-exporter:
-    image: prom/node-exporter:v1.1.2
-    user: root
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
-    networks:
-      - back_net
+      - reddit_front
+      - reddit_back
 
 volumes:
   post_db:
-  prometheus_data:
 
 networks:
-  front_net:
-  back_net:
+  reddit_front:
+  reddit_back:
